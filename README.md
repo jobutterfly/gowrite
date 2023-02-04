@@ -4,3 +4,4 @@ The objective is to create a simple text editor and learn how to correctly creat
 
 References:
 - https://viewsourcecode.org/snaptoken/kilo/
+- https://www.rapidtables.com/code/text/ascii-table.html
