@@ -2,10 +2,12 @@ package main
 
 import (
 	"bytes"
+	"strings"
 	"os"
 	"errors"
 	"fmt"
 	"log"
+	"bufio"
 
 	"golang.org/x/sys/unix"
 	"golang.org/x/term"
@@ -25,14 +27,18 @@ const (
 
 const gowriteVersion = "0.1"
 
-type EditorConfig struct {
-	cx	int
-	cy	int
-	termios *term.State
-	winSize	*unix.Winsize
+type editorConfig struct {
+	cx		int
+	cy		int
+	rowOff		int
+	termios 	*term.State
+	screenRows 	int
+	screenCols	int
+	numRows		int
+	row		[]*bytes.Buffer
 }
 
-var E EditorConfig;
+var E editorConfig;
 
 
 // terminal
@@ -103,17 +109,15 @@ func readKey() int {
 	return int(b[0])
 }
 
-func getCursorPosition() (*unix.Winsize, error) {
-	var row, col int
+func getCursorPosition() (row int, col int, err error) {
 	var buf []byte = make([]byte, 32)
 	var i int = 0
-	_, err := os.Stdout.Write([]byte("\x1b[6n"))
-	if err != nil {
-	    return nil, err
+	if _, err := os.Stdout.Write([]byte("\x1b[6n")); err != nil {
+	    return 0, 0, err
 	}
 	
 	if _, err := os.Stdin.Read(buf); err != nil {
-	    return nil, err
+	    return 0, 0, err
 	}
 
 	for ;i < len(buf); {
@@ -124,41 +128,154 @@ func getCursorPosition() (*unix.Winsize, error) {
 	}
 
 	if buf[0] != '\x1b' || buf[1] != '['  {
-	    return nil, errors.New("Could not find escape sequence when getting cursor position")
+	    return 0, 0, errors.New("Could not find escape sequence when getting cursor position")
 	}
 
 	if _, err := fmt.Sscanf(string(buf[2:i]), "%d;%d", &row, &col); err != nil {
-	    return nil, err
+	    return 0, 0, err
 	}
 
-	winSize := unix.Winsize{
-	    Row: uint16(row),
-	    Col: uint16(col),
-	}
-
-	readKey()
-
-	return &winSize, nil
+	return row, col, nil
 }
 
-func getWindowSize() (*unix.Winsize, error){
+func getWindowSize() (rows int, cols int, err error){
 	winSize, err := unix.IoctlGetWinsize(int(os.Stdout.Fd()), unix.TIOCGWINSZ)
 	if err != nil {
-	    return nil, err
+	    return 0, 0, err
 	}
 
 	if (winSize.Row < 1 || winSize.Col < 1) {
 	    _, err := os.Stdout.Write([]byte("\x1b[999C\x1b[999B"))
 	    if err != nil {
-		return nil, err
+		return 0, 0, err
 	    }
 
 	    return getCursorPosition()
-
 	}
-	return winSize, nil
+	return int(winSize.Row), int(winSize.Col), nil
 }
 
+// row operations
+
+func appendRow(s []byte) error {
+	buf := bytes.NewBuffer(s)
+	E.row = append(E.row, buf)
+
+	E.numRows++;
+
+	return nil
+}
+
+// file i/o
+
+func editorOpen(fileName string) error {
+	file, err := os.ReadFile(fileName)
+	if err != nil {
+	    return err
+	}
+
+	reader := bufio.NewReader(strings.NewReader(string(file)))
+	for ;; {
+	    line, _, err := reader.ReadLine()
+	    if err != nil {
+		break
+	    }
+
+	    if err := appendRow(line); err != nil {
+		return err
+	    }
+	}	
+
+	return nil
+}
+
+
+// output
+
+func scroll() {
+    if E.cy < E.rowOff {
+	E.rowOff = E.cy
+    }
+    if E.cy >= E.rowOff + E.screenRows {
+	E.rowOff = E.cy - E.screenRows + 1
+    }
+}
+
+func drawRows(buf *bytes.Buffer) error {
+	for i := 0; i < E.screenRows ; i++ {
+	    fileRow := i + E.rowOff
+	    if fileRow >= E.numRows {
+		if E.numRows == 0 && i == E.screenRows / 3 {
+		    if _, err := buf.Write([]byte("~")); err != nil {
+			return err
+		    }
+		    welcome := fmt.Sprintf("gowrite version: %s", gowriteVersion)
+		    padding := (E.screenCols - len(welcome)) / 2
+		    for ;padding > 1; padding-- {
+			buf.Write([]byte(" "))
+		    }
+		    buf.Write([]byte(welcome))
+		} else {
+		    if _, err := buf.Write([]byte("~")); err != nil {
+			return err
+		    }
+		}
+
+	    } else {
+		// ex problem here, keep in mind for future problems
+		length := E.row[fileRow].Len()
+		if length > E.screenCols {
+		    length = E.screenCols
+		}
+		if _, err := buf.Write((E.row[fileRow].Bytes())[:length]); err != nil {
+		    return err
+		}
+	    }
+
+	    if _, err := buf.Write([]byte("\x1b[K")); err != nil {
+		return err
+	    }
+	    if i < E.screenRows - 1 {
+		if _, err := buf.Write([]byte("\r\n")); err != nil {
+		    return err
+		}
+	    }
+	}
+
+	return nil
+}
+
+func refreshScreen() error{
+	var mainBuf bytes.Buffer
+	scroll()
+
+	if _, err := mainBuf.Write([]byte("\x1b[?25l")); err != nil {
+	    return err
+	}
+	if _, err := mainBuf.Write([]byte("\x1b[H")); err != nil {
+	    return err
+	}
+
+	err := drawRows(&mainBuf)
+	if err != nil {
+	    return err
+	}
+
+	if _, err := mainBuf.Write([]byte(fmt.Sprintf("\x1b[%d;%dH", E.cy - E.rowOff + 1, E.cx + 1))); err != nil {
+	    return err
+	}
+	if _, err := mainBuf.Write([]byte("\x1b[?25h")); err != nil {
+	    return err
+	}
+
+	if _, err := os.Stdout.Write(mainBuf.Bytes()); err != nil {
+	    return err
+
+	}
+	mainBuf.Reset()
+
+	return nil
+}
 
 // input
 
@@ -169,11 +286,11 @@ func moveCursor(key int) {
 		E.cx--
 	    }
 	case RIGHT:
-	    if (E.cx != int(E.winSize.Col) - 1) {
+	    if (E.cx != E.screenCols - 1) {
 		E.cx++
 	    }
 	case DOWN:
-	    if (E.cy != int(E.winSize.Row) - 1) {
+	    if (E.cy < E.numRows) {
 		E.cy++
 	    }
 	case UP:
@@ -206,93 +323,35 @@ func processKeyPress(oldState *term.State) bool{
 	case LEFT:
 	    moveCursor(char)
 	case PAGE_UP: 
-	for i:= E.winSize.Row ;i > 1; i-- {
+	for i:= E.screenRows ;i > 1; i-- {
 	    moveCursor(UP)
 	}
 	case PAGE_DOWN:
-	for i:= E.winSize.Row ;i > 1; i-- {
+	for i:= E.screenRows ;i > 1; i-- {
 	    moveCursor(DOWN)
 	}
 	case HOME:
 	    E.cx = 0;
 	case END:
-	    E.cx = int(E.winSize.Col) - 1
+	    E.cx = E.screenCols - 1
 	}
 
 	return false
 }
-
-// output
-
-func drawRows(mainBuf *bytes.Buffer) error {
-	for i := 0; i < int(E.winSize.Row) ; i++ {
-	    if _, err := mainBuf.Write([]byte("~")); err != nil {
-		return err
-	    }
-
-	    if i == int(E.winSize.Row) / 3 {
-		welcome := fmt.Sprintf("gowrite version: %s", gowriteVersion)
-		padding := (int(E.winSize.Col) - len(welcome)) / 2
-		for ;padding > 1; padding-- {
-		    mainBuf.Write([]byte(" "))
-		}
-		mainBuf.Write([]byte(welcome))
-	    } 
-
-	    if _, err := mainBuf.Write([]byte("\x1b[K")); err != nil {
-		return err
-	    }
-	    if i < int(E.winSize.Row) - 1 {
-		if _, err := mainBuf.Write([]byte("\r\n")); err != nil {
-		    return err
-		}
-	    }
-	}
-
-	return nil
-}
-
-func refreshScreen() error{
-	var mainBuf bytes.Buffer
-
-	if _, err := mainBuf.Write([]byte("\x1b[?25l")); err != nil {
-	    return err
-	}
-	if _, err := mainBuf.Write([]byte("\x1b[H")); err != nil {
-	    return err
-	}
-
-	err := drawRows(&mainBuf)
-	if err != nil {
-	    return err
-	}
-
-	if _, err := mainBuf.Write([]byte(fmt.Sprintf("\x1b[%d;%dH", E.cy + 1, E.cx + 1))); err != nil {
-	    return err
-	}
-	if _, err := mainBuf.Write([]byte("\x1b[?25h")); err != nil {
-	    return err
-	}
-
-	if _, err := os.Stdout.Write(mainBuf.Bytes()); err != nil {
-	    return err
-
-	}
-	mainBuf.Reset()
-
-	return nil
-}
-
 // init
 
 func initEditor() {
 	E.cx = 0
 	E.cy = 0
-	winSize, err := getWindowSize()
+	rows, cols, err := getWindowSize()
 	if err != nil {
 	    die(err)
 	}
-	E.winSize = winSize
+	E.screenRows = rows
+	E.screenCols = cols
+	E.numRows = 0
+	E.rowOff = 0
+	E.row = []*bytes.Buffer{}
 }
 
 func main() {
@@ -303,6 +362,13 @@ func main() {
 	E.termios = oldState
 	defer term.Restore(int(os.Stdin.Fd()), E.termios)
 	initEditor()
+
+	args := os.Args
+	if len(args) >= 2 {
+	    if err := editorOpen(args[1]); err != nil {
+		die(err)
+	    }
+	}
 
 	for {
 	    if err := refreshScreen(); err != nil {

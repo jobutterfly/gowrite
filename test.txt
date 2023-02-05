@@ -1,0 +1,59 @@
+1this is a text file
+
+2with no difficult letters
+
+3If the buffer overflows, the VT100 will begin to discard incoming characters and the error character will be displayed.
+
+4Software which does not support receipt of the XOFF/XON signals from the terminal can still use the VT100 provided the software never sends the ESC code to the terminal, the baud rate is limited to 4800 or less, and the software does not use smooth scrolling or split screen features.
+
+5Alternatively, if XOFF/XON cannot be used, fill characters may be used after characters or character strings are sent to the VT100. A reference chart of fill characters required for these functions is included in Appendix C.
+
+6Two of the terminal functions, Reset and Self-Test, reinitialize the terminal and erase the buffer. This means that if characters are received subsequent to the commands to perform these two functions and the characters are placed in the buffer, the character would be destroyed without being processed.
+
+7To compensate for this, the host may act in one of two ways:
+
+8The XOFF/XON synchronization scheme has an advantage over requiring the host to insert delays or filler characters in its data stream. Requiring a minimum of software support, XON/XOFF ensures that every character or command sent to the VT100 will be processed in correct order. It frees interface programs from all timing considerations and results in more reliable operation.
+
+9In addition to the buffer-filling condition, there are two other means of transmitting XOFF and XON; the NO SCROLL key, and Control S/Control Q. If the XON/XOFF feature is enabled, the VT100 will coordinate these three sources of XOFF and XON so that the desired effect occurs. For example, if the buffer-filling condition has caused an XOFF to be sent, and then the operator types the NO SCROLL key, a second XOFF is not sent. Instead of sending an XON when the buffer empties, the VT100 waits until the operator types the NO SCROLL key again before sending XON.
+
+10Also, entering SET-UP mode causes the VT100 to temporarily stop taking characters from the buffer. An XOFF will be sent if the buffer becomes nearly full.
+
+11Use of Control S and Control Q will also be synchronized with the NO SCROLL key.
+
+12If the XON/XOFF feature is disabled, the buffer-filling condition will not send an XOFF, the NO SCROLL key is disabled, and Control S and Control Q will be transmitted as typed.
+
+13The VT100 also recognizes received XOFF and XON. Receipt of XOFF will inhibit the VT100 from transmitting any codes except XOFF and XON. From three to seven keystrokes on the keyboard will be stored in a keyboard buffer (some keys transmit two or three codes, e.g., cursor controls). If the keyboard buffer overflows, keyclicks will stop and the KBD LOCKED LED will come on. Transmission resumes upon receipt of XON.
+
+14If the user transmits an XOFF to the host (by Control S or NO SCROLL), the host should not echo any further type-in until the user types XON. This places the burden of not overloading the host’s output buffer on the user.
+
+15Entering and exiting SET-UP clears the keyboard locked condition.
+
+16this is a text file
+
+17with no difficult letters
+
+18If the buffer overflows, the VT100 will begin to discard incoming characters and the error character will be displayed.
+
+19Software which does not support receipt of the XOFF/XON signals from the terminal can still use the VT100 provided the software never sends the ESC code to the terminal, the baud rate is limited to 4800 or less, and the software does not use smooth scrolling or split screen features.
+
+20Alternatively, if XOFF/XON cannot be used, fill characters may be used after characters or character strings are sent to the VT100. A reference chart of fill characters required for these functions is included in Appendix C.
+
+21Two of the terminal functions, Reset and Self-Test, reinitialize the terminal and erase the buffer. This means that if characters are received subsequent to the commands to perform these two functions and the characters are placed in the buffer, the character would be destroyed without being processed.
+
+22To compensate for this, the host may act in one of two ways:
+
+23The XOFF/XON synchronization scheme has an advantage over requiring the host to insert delays or filler characters in its data stream. Requiring a minimum of software support, XON/XOFF ensures that every character or command sent to the VT100 will be processed in correct order. It frees interface programs from all timing considerations and results in more reliable operation.
+
+24In addition to the buffer-filling condition, there are two other means of transmitting XOFF and XON; the NO SCROLL key, and Control S/Control Q. If the XON/XOFF feature is enabled, the VT100 will coordinate these three sources of XOFF and XON so that the desired effect occurs. For example, if the buffer-filling condition has caused an XOFF to be sent, and then the operator types the NO SCROLL key, a second XOFF is not sent. Instead of sending an XON when the buffer empties, the VT100 waits until the operator types the NO SCROLL key again before sending XON.
+
+25Also, entering SET-UP mode causes the VT100 to temporarily stop taking characters from the buffer. An XOFF will be sent if the buffer becomes nearly full.
+
+26Use of Control S and Control Q will also be synchronized with the NO SCROLL key.
+
+27If the XON/XOFF feature is disabled, the buffer-filling condition will not send an XOFF, the NO SCROLL key is disabled, and Control S and Control Q will be transmitted as typed.
+
+28The VT100 also recognizes received XOFF and XON. Receipt of XOFF will inhibit the VT100 from transmitting any codes except XOFF and XON. From three to seven keystrokes on the keyboard will be stored in a keyboard buffer (some keys transmit two or three codes, e.g., cursor controls). If the keyboard buffer overflows, keyclicks will stop and the KBD LOCKED LED will come on. Transmission resumes upon receipt of XON.
+
+29If the user transmits an XOFF to the host (by Control S or NO SCROLL), the host should not echo any further type-in until the user types XON. This places the burden of not overloading the host’s output buffer on the user.
+
+30Entering and exiting SET-UP clears the keyboard locked condition.
