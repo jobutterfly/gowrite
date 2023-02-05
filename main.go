@@ -227,7 +227,7 @@ func drawRows(buf *bytes.Buffer) error {
 		if length > E.screenCols {
 		    length = E.screenCols
 		}
-		if _, err := buf.Write((E.row[fileRow].Bytes())[:length]); err != nil {
+		if _, err := buf.Write(E.row[fileRow].Bytes()); err != nil {
 		    return err
 		}
 	    }
