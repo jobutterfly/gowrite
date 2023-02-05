@@ -11,6 +11,18 @@ import (
 	"golang.org/x/term"
 )
 
+const (
+	LEFT int = 1000 
+	RIGHT int = 1001 
+	UP int = 1002 
+	DOWN int = 1003
+	DELETE int = 1004
+	HOME int = 1005
+	END int = 1006
+	PAGE_UP int = 1007
+	PAGE_DOWN int = 1008
+)
+
 const gowriteVersion = "0.1"
 
 type EditorConfig struct {
@@ -27,15 +39,14 @@ var E EditorConfig;
 
 func die(err error) {
 	term.Restore(int(os.Stdin.Fd()), E.termios)
-	fmt.Printf("%v\n", err)
 	if _, err := os.Stdout.Write([]byte("\x1b[2J")); err != nil {
 	    log.Fatal("Could not clean screen")
-	    
 	}
+	fmt.Printf("%v\n", err)
 	os.Exit(1)
 }
 
-func readKey() byte {
+func readKey() int {
 	var b []byte = make([]byte, 1)
 
 	nread, err := os.Stdin.Read(b)
@@ -47,7 +58,49 @@ func readKey() byte {
 	    die(errors.New(fmt.Sprintf("Wanted to read one character, got %d", nread)))
 	}
 
-	return b[0]
+	if b[0] == '\x1b' {
+	    var seq []byte = make([]byte, 3)
+
+	    _, err := os.Stdin.Read(seq)
+	    if err != nil {
+		die(err)
+	    }
+
+	    if seq[0] == '['{
+		if seq[1] >= '0' && seq[1] <= '9' {
+		    if seq[2] == '~' {
+			switch seq[1] {
+			case '1': return HOME
+			case '3': return DELETE
+			case '4': return END
+			case '5': return PAGE_UP
+			case '6': return PAGE_DOWN
+			case '7': return HOME
+			case '8': return END
+			}
+		    }
+		} else {
+		    switch seq[1] {
+		    case 'A': return UP
+		    case 'B': return DOWN
+		    case 'C': return RIGHT
+		    case 'D': return LEFT
+		    case 'H': return HOME
+		    case 'F': return END
+		    }
+
+		}
+	    } else if seq[0] == 'O' {
+		switch seq[1] {
+		case 'H': return HOME
+		case 'F': return END
+		}
+	    }
+
+	    return '\x1b'
+	} 
+
+	return int(b[0])
 }
 
 func getCursorPosition() (*unix.Winsize, error) {
@@ -109,8 +162,29 @@ func getWindowSize() (*unix.Winsize, error){
 
 // input
 
+func moveCursor(key int) {
+	switch (key){
+	case LEFT: 
+	    if (E.cx  != 0) {
+		E.cx--
+	    }
+	case RIGHT:
+	    if (E.cx != int(E.winSize.Col) - 1) {
+		E.cx++
+	    }
+	case DOWN:
+	    if (E.cy != int(E.winSize.Row) - 1) {
+		E.cy++
+	    }
+	case UP:
+	    if (E.cy != 0) {
+		E.cy--
+	    }
+	}
+}
+
 func processKeyPress(oldState *term.State) bool{
-	var char byte = readKey()
+	var char int = readKey()
 
 	switch (char) {
 	// see references in readme for ascii control codes
@@ -123,6 +197,26 @@ func processKeyPress(oldState *term.State) bool{
 		die(err)
 	    }
 	    return true
+	case UP:
+	    moveCursor(char)
+	case DOWN:
+	    moveCursor(char)
+	case RIGHT:
+	    moveCursor(char)
+	case LEFT:
+	    moveCursor(char)
+	case PAGE_UP: 
+	for i:= E.winSize.Row ;i > 1; i-- {
+	    moveCursor(UP)
+	}
+	case PAGE_DOWN:
+	for i:= E.winSize.Row ;i > 1; i-- {
+	    moveCursor(DOWN)
+	}
+	case HOME:
+	    E.cx = 0;
+	case END:
+	    E.cx = int(E.winSize.Col) - 1
 	}
 
 	return false
@@ -130,16 +224,20 @@ func processKeyPress(oldState *term.State) bool{
 
 // output
 
-func drawRows(mainBuf bytes.Buffer) error {
+func drawRows(mainBuf *bytes.Buffer) error {
 	for i := 0; i < int(E.winSize.Row) ; i++ {
+	    if _, err := mainBuf.Write([]byte("~")); err != nil {
+		return err
+	    }
+
 	    if i == int(E.winSize.Row) / 3 {
 		welcome := fmt.Sprintf("gowrite version: %s", gowriteVersion)
-		mainBuf.Write([]byte(welcome))
-	    } else {
-		if _, err := mainBuf.Write([]byte("~")); err != nil {
-		    return err
+		padding := (int(E.winSize.Col) - len(welcome)) / 2
+		for ;padding > 1; padding-- {
+		    mainBuf.Write([]byte(" "))
 		}
-	    }
+		mainBuf.Write([]byte(welcome))
+	    } 
 
 	    if _, err := mainBuf.Write([]byte("\x1b[K")); err != nil {
 		return err
@@ -164,11 +262,12 @@ func refreshScreen() error{
 	    return err
 	}
 
-	err := drawRows(mainBuf)
+	err := drawRows(&mainBuf)
 	if err != nil {
 	    return err
 	}
-	if _, err := mainBuf.Write([]byte("\x1b[H")); err != nil {
+
+	if _, err := mainBuf.Write([]byte(fmt.Sprintf("\x1b[%d;%dH", E.cy + 1, E.cx + 1))); err != nil {
 	    return err
 	}
 	if _, err := mainBuf.Write([]byte("\x1b[?25h")); err != nil {
