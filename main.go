@@ -180,6 +180,13 @@ func editorOpen(fileName string) error {
 	    if scanner.Err() != nil {
 		die(err)
 	    }
+	    /*
+	     Don't know why, but if scanner.Bytes() is called instead
+	     what is show below, part of the first line of E.row becomes
+	     overwritten by the last line of the file, with the black
+	     magic below it doesn't happen. probably something to do 
+	     with memory
+	    */
 	    if err := appendRow([]byte(scanner.Text())); err != nil {
 		return err
 	    }
@@ -228,11 +235,19 @@ func drawRows(buf *bytes.Buffer) error {
 
 	    } else {
 		// ex problem here, keep in mind for future problems
-		length := E.row[fileRow].Len()
-		if length > E.screenCols {
-		    length = E.screenCols
+		// try to understand how this works properly
+		length := E.screenCols + E.colOff
+		from := E.colOff
+		if length < 0 {
+		    length = 0
 		}
-		if _, err := buf.Write(E.row[fileRow].Bytes()[:length]); err != nil {
+		if length >= E.row[fileRow].Len() {
+		    length = E.row[fileRow].Len() 
+		}
+		if from >= length {
+		    from = length
+		}
+		if _, err := buf.Write(E.row[fileRow].Bytes()[from:length]); err != nil {
 		    return err
 		}
 	    }
@@ -267,7 +282,7 @@ func refreshScreen() error{
 	    return err
 	}
 
-	if _, err := mainBuf.Write([]byte(fmt.Sprintf("\x1b[%d;%dH", E.cy - E.rowOff + 1, E.cx + 1))); err != nil {
+	if _, err := mainBuf.Write([]byte(fmt.Sprintf("\x1b[%d;%dH", E.cy - E.rowOff + 1, E.cx - E.colOff + 1))); err != nil {
 	    return err
 	}
 	if _, err := mainBuf.Write([]byte("\x1b[?25h")); err != nil {
@@ -285,10 +300,10 @@ func refreshScreen() error{
 // input
 
 func moveCursor(key int) {
-	var cursorOutOfFile bool = false
 	var row *bytes.Buffer
+	var lastRow bool = false
 	if E.cy >= E.numRows {
-	    cursorOutOfFile = true
+	    lastRow = true
 	} else {
 	    row = E.row[E.cy]
 	}
@@ -299,7 +314,8 @@ func moveCursor(key int) {
 		E.cx--
 	    }
 	case RIGHT:
-	    if !cursorOutOfFile {
+	    if !lastRow {
+		// we are going past the below condition
 		if E.cx < row.Len() {
 		    E.cx++
 		}
@@ -316,14 +332,15 @@ func moveCursor(key int) {
 
 	var rowLen int = 0
 	if E.cy >= E.numRows {
-	    cursorOutOfFile = true
+	    lastRow = true
 	} else {
 	    row = E.row[E.cy]
-	    rowLen = row.Len()
+	    rowLen = E.row[E.cy].Len()
 	}
 	if E.cx > rowLen {
 	    E.cx = rowLen
 	}
+
 }
 
 func processKeyPress(oldState *term.State) bool{
