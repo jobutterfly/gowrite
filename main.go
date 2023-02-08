@@ -8,12 +8,14 @@ import (
 	"log"
 	"os"
 	"strings"
+	"time"
 
 	"golang.org/x/sys/unix"
 	"golang.org/x/term"
 )
 
 const (
+	BACHSPACE int = 127
 	LEFT      int = 1000
 	RIGHT     int = 1001
 	UP        int = 1002
@@ -29,17 +31,19 @@ const gowriteVersion = "0.1"
 const tabStopSize = 8
 
 type editorConfig struct {
-	cx         int
-	cy         int
-	rx         int
-	rowOff     int
-	colOff     int
-	termios    *term.State
-	screenRows int
-	screenCols int
-	numRows    int
-	rows       []*row
-	fileName   string
+	cx            int
+	cy            int
+	rx            int
+	rowOff        int
+	colOff        int
+	termios       *term.State
+	screenRows    int
+	screenCols    int
+	numRows       int
+	rows          []*row
+	fileName      string
+	statusMsg     string
+	statusMsgTime time.Time
 }
 
 type row struct {
@@ -215,6 +219,27 @@ func appendRow(s []byte) error {
 	return nil
 }
 
+func rowInsertChar(row *row, at int, c byte) {
+	if at < 0 || at > row.chars.Len() {
+		at = row.chars.Len()
+	}
+	old := row.chars.Bytes()
+	firstPart := append(old[:at], c)
+	joinBytes := [][]byte{firstPart, old[at:]}
+	row.chars = bytes.NewBuffer(bytes.Join(joinBytes, []byte("")))
+	updateRow(row)
+}
+
+// editor operations
+
+func insertChar(c byte) {
+	if E.cy == E.numRows {
+		appendRow([]byte(""))
+	}
+	rowInsertChar(E.rows[E.cy], E.cx, c)
+	E.cx++
+}
+
 // file i/o
 
 func editorOpen(fileName string) error {
@@ -224,7 +249,7 @@ func editorOpen(fileName string) error {
 	}
 	defer file.Close()
 	E.fileName = fileName
-	
+
 	scanner := bufio.NewScanner(file)
 	scanner.Split(bufio.ScanLines)
 	for i := 0; scanner.Scan(); i++ {
@@ -315,7 +340,7 @@ func drawStatusBar(buf *bytes.Buffer) error {
 	}
 
 	status := fmt.Sprintf("%.20s - %d lines", E.fileName, E.numRows)
-	rowStatus := fmt.Sprintf("%d/%d", E.cy + 1, E.numRows)
+	rowStatus := fmt.Sprintf("%d/%d", E.cy+1, E.numRows)
 	length := len(status)
 	rLength := len(rowStatus)
 	if length > E.screenCols {
@@ -326,12 +351,14 @@ func drawStatusBar(buf *bytes.Buffer) error {
 	if _, err := buf.Write([]byte(status)); err != nil {
 		return err
 	}
+	// die(errors.New(fmt.Sprintf("legnth: %d\nrLength: %d\nE.screenCols: %d\nrowStatus: %s\n", length, rLength, E.screenCols, rowStatus)))
 
-	for i := length;i < E.screenCols; {
-		if E.screenCols - length == rLength {
+	for i := length; i < E.screenCols; {
+		if E.screenCols-i == rLength {
 			if _, err := buf.Write([]byte(rowStatus)); err != nil {
 				return err
 			}
+			break
 		} else {
 			if _, err := buf.Write([]byte(" ")); err != nil {
 				return err
@@ -343,9 +370,32 @@ func drawStatusBar(buf *bytes.Buffer) error {
 	if _, err := buf.Write([]byte("\x1b[m")); err != nil {
 		return err
 	}
+	if _, err := buf.Write([]byte("\r\n")); err != nil {
+		return err
+	}
 
 	return nil
-} 
+}
+
+func drawMessageBar(buf *bytes.Buffer) error {
+	if _, err := buf.Write([]byte("\x1b[K")); err != nil {
+		return err
+	}
+
+	if E.statusMsg != "" {
+		msgLen := len(E.statusMsg)
+
+		if msgLen > E.screenCols {
+			msgLen = E.screenCols
+		}
+		if (time.Now()).Unix() - E.statusMsgTime.Unix() < 5 {
+			if _, err := buf.Write([]byte(E.statusMsg)); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
 
 func refreshScreen() error {
 	scroll()
@@ -365,6 +415,9 @@ func refreshScreen() error {
 	if err := drawStatusBar(&mainBuf); err != nil {
 		return err
 	}
+	if err := drawMessageBar(&mainBuf); err != nil {
+		return err
+	}
 
 	if _, err := mainBuf.Write([]byte(fmt.Sprintf("\x1b[%d;%dH", E.cy-E.rowOff+1, E.rx-E.colOff+1))); err != nil {
 		return err
@@ -379,6 +432,11 @@ func refreshScreen() error {
 	}
 
 	return nil
+}
+
+func setStatusMsg(msg string) {
+	E.statusMsg = msg
+	E.statusMsgTime = time.Now()
 }
 
 // input
@@ -438,6 +496,7 @@ func processKeyPress(oldState *term.State) bool {
 
 	switch char {
 	// see references in readme for ascii control codes
+	case '\r':
 	// control q
 	case 17:
 		if _, err := os.Stdout.Write([]byte("\x1b[2J")); err != nil {
@@ -457,12 +516,12 @@ func processKeyPress(oldState *term.State) bool {
 		moveCursor(char)
 	case PAGE_UP:
 		E.cy = E.rowOff
-		for i := E.screenRows;i > 1; i-- {
+		for i := E.screenRows; i > 1; i-- {
 			moveCursor(UP)
 		}
 	case PAGE_DOWN:
 		E.cy = E.rowOff + E.screenRows - 1
-		if E.cy  > E.numRows {
+		if E.cy > E.numRows {
 			E.cy = E.numRows
 		}
 		for i := E.screenRows; i > 1; i-- {
@@ -474,6 +533,8 @@ func processKeyPress(oldState *term.State) bool {
 		if E.cy < E.numRows {
 			E.cx = E.rows[E.cy].chars.Len()
 		}
+	default:
+		insertChar(byte(char))
 	}
 
 	return false
@@ -496,8 +557,10 @@ func initEditor() {
 	E.colOff = 0
 	E.rows = []*row{}
 	E.fileName = ""
+	E.statusMsg = ""
+	E.statusMsgTime = time.Now()
 
-	E.screenRows -= 1
+	E.screenRows -= 2
 }
 
 func main() {
@@ -515,6 +578,8 @@ func main() {
 			die(err)
 		}
 	}
+
+	setStatusMsg("HELP: Ctrl-Q = quit")
 
 	for {
 		if err := refreshScreen(); err != nil {
