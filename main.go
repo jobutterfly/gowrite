@@ -26,7 +26,6 @@ const (
 )
 
 const gowriteVersion = "0.1"
-const tabStop = "        "
 const tabStopSize = 8
 
 type editorConfig struct {
@@ -40,6 +39,7 @@ type editorConfig struct {
 	screenCols int
 	numRows    int
 	rows       []*row
+	fileName   string
 }
 
 type row struct {
@@ -185,7 +185,7 @@ func cxToRx(row *row, cx int) int {
 	buf := row.chars.Bytes()
 	for i := 0; i < cx; i++ {
 		if buf[i] == '\t' {
-			rx += tabStopSize - 1 - (rx % tabStopSize)
+			rx += (tabStopSize - 1)
 		}
 		rx++
 	}
@@ -193,9 +193,14 @@ func cxToRx(row *row, cx int) int {
 }
 
 func updateRow(row *row) {
+	var newTab string = ""
+
+	for i := 0; i < tabStopSize; i++ {
+		newTab = newTab + " "
+	}
 	chars := row.chars.String()
 	splitChars := strings.Split(chars, "\t")
-	newChars := strings.Join(splitChars, tabStop)
+	newChars := strings.Join(splitChars, newTab)
 	row.render = bytes.NewBufferString(newChars)
 }
 
@@ -218,21 +223,14 @@ func editorOpen(fileName string) error {
 		return err
 	}
 	defer file.Close()
-	i := 0
-
+	E.fileName = fileName
+	
 	scanner := bufio.NewScanner(file)
 	scanner.Split(bufio.ScanLines)
-	for ; scanner.Scan(); i++ {
+	for i := 0; scanner.Scan(); i++ {
 		if scanner.Err() != nil {
 			die(err)
 		}
-		/*
-		   Don't know why, but if scanner.Bytes() is called instead
-		   what is show below, part of the first line of E.row becomes
-		   overwritten by the last line of the file, with the black
-		   magic below it doesn't happen. probably something to do
-		   with memory
-		*/
 		if err := appendRow([]byte(scanner.Text())); err != nil {
 			return err
 		}
@@ -303,15 +301,51 @@ func drawRows(buf *bytes.Buffer) error {
 		if _, err := buf.Write([]byte("\x1b[K")); err != nil {
 			return err
 		}
-		if i < E.screenRows-1 {
-			if _, err := buf.Write([]byte("\r\n")); err != nil {
-				return err
-			}
+		if _, err := buf.Write([]byte("\r\n")); err != nil {
+			return err
 		}
 	}
 
 	return nil
 }
+
+func drawStatusBar(buf *bytes.Buffer) error {
+	if _, err := buf.Write([]byte("\x1b[7m")); err != nil {
+		return err
+	}
+
+	status := fmt.Sprintf("%.20s - %d lines", E.fileName, E.numRows)
+	rowStatus := fmt.Sprintf("%d/%d", E.cy + 1, E.numRows)
+	length := len(status)
+	rLength := len(rowStatus)
+	if length > E.screenCols {
+		length = E.screenCols
+		status = status[:length]
+	}
+
+	if _, err := buf.Write([]byte(status)); err != nil {
+		return err
+	}
+
+	for i := length;i < E.screenCols; {
+		if E.screenCols - length == rLength {
+			if _, err := buf.Write([]byte(rowStatus)); err != nil {
+				return err
+			}
+		} else {
+			if _, err := buf.Write([]byte(" ")); err != nil {
+				return err
+			}
+			i++
+		}
+	}
+
+	if _, err := buf.Write([]byte("\x1b[m")); err != nil {
+		return err
+	}
+
+	return nil
+} 
 
 func refreshScreen() error {
 	scroll()
@@ -325,8 +359,10 @@ func refreshScreen() error {
 		return err
 	}
 
-	err := drawRows(&mainBuf)
-	if err != nil {
+	if err := drawRows(&mainBuf); err != nil {
+		return err
+	}
+	if err := drawStatusBar(&mainBuf); err != nil {
 		return err
 	}
 
@@ -420,17 +456,24 @@ func processKeyPress(oldState *term.State) bool {
 	case LEFT:
 		moveCursor(char)
 	case PAGE_UP:
-		for i := E.screenRows; i > 1; i-- {
+		E.cy = E.rowOff
+		for i := E.screenRows;i > 1; i-- {
 			moveCursor(UP)
 		}
 	case PAGE_DOWN:
+		E.cy = E.rowOff + E.screenRows - 1
+		if E.cy  > E.numRows {
+			E.cy = E.numRows
+		}
 		for i := E.screenRows; i > 1; i-- {
 			moveCursor(DOWN)
 		}
 	case HOME:
 		E.cx = 0
 	case END:
-		E.cx = E.screenCols - 1
+		if E.cy < E.numRows {
+			E.cx = E.rows[E.cy].chars.Len()
+		}
 	}
 
 	return false
@@ -452,6 +495,9 @@ func initEditor() {
 	E.rowOff = 0
 	E.colOff = 0
 	E.rows = []*row{}
+	E.fileName = ""
+
+	E.screenRows -= 1
 }
 
 func main() {
