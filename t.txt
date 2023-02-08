@@ -2,8 +2,8 @@ package main
 
 import (
 	"bytes"
-	"strings"
 	"os"
+	"strings"
 	"errors"
 	"fmt"
 	"log"
@@ -36,7 +36,12 @@ type editorConfig struct {
 	screenRows 	int
 	screenCols	int
 	numRows		int
-	row		[]*bytes.Buffer
+	rows		[]*row
+}
+
+type row struct {
+	chars		*bytes.Buffer
+	render		*bytes.Buffer
 }
 
 var E editorConfig;
@@ -158,9 +163,20 @@ func getWindowSize() (rows int, cols int, err error){
 
 // row operations
 
+func updateRow(row *row) {
+
+	chars := row.render.String()
+	splitChars := strings.SplitAfter(chars, "\t")
+	newChars := strings.Join(splitChars, "        ")
+	row.render = bytes.NewBufferString(newChars)
+} 
+
 func appendRow(s []byte) error {
-	buf := bytes.NewBuffer(s)
-	E.row = append(E.row, buf)
+	n := &row{
+	    chars: bytes.NewBuffer(s),
+	}
+	E.rows = append(E.rows, n)
+	updateRow(E.rows[len(E.rows) - 1])
 	E.numRows++;
 
 	return nil
@@ -169,22 +185,30 @@ func appendRow(s []byte) error {
 // file i/o
 
 func editorOpen(fileName string) error {
-	file, err := os.ReadFile(fileName)
+	file, err := os.Open(fileName)
 	if err != nil {
 	    return err
 	}
+	defer file.Close()
+	i := 0
 
-	reader := bufio.NewReader(strings.NewReader(string(file)))
-	for ;; {
-	    line, _, err := reader.ReadLine()
-	    if err != nil {
-		break
+	scanner := bufio.NewScanner(file)
+	scanner.Split(bufio.ScanLines)
+	for ; scanner.Scan(); i++ {
+	    if scanner.Err() != nil {
+		die(err)
 	    }
-
-	    if err := appendRow(line); err != nil {
+	    /*
+	     Don't know why, but if scanner.Bytes() is called instead
+	     what is show below, part of the first line of E.row becomes
+	     overwritten by the last line of the file, with the black
+	     magic below it doesn't happen. probably something to do 
+	     with memory
+	    */
+	    if err := appendRow([]byte(scanner.Text())); err != nil {
 		return err
 	    }
-	}	
+	}
 
 	return nil
 }
@@ -228,20 +252,18 @@ func drawRows(buf *bytes.Buffer) error {
 		}
 
 	    } else {
-		// ex problem here, keep in mind for future problems
+		length := E.screenCols + E.colOff
 		from := E.colOff
-		length := E.colOff + E.screenCols
-		if length >= E.row[fileRow].Len() {
-		    length = E.row[fileRow].Len()
-		    from = 0
-		}
 		if length < 0 {
 		    length = 0
+		}
+		if length >= E.rows[fileRow].render.Len() {
+		    length = E.rows[fileRow].render.Len() 
 		}
 		if from >= length {
 		    from = length
 		}
-		if _, err := buf.Write(E.row[fileRow].Bytes()[from:length]); err != nil {
+		if _, err := buf.Write(E.rows[fileRow].render.Bytes()[from:length]); err != nil {
 		    return err
 		}
 	    }
@@ -260,8 +282,9 @@ func drawRows(buf *bytes.Buffer) error {
 }
 
 func refreshScreen() error{
-	var mainBuf bytes.Buffer
 	scroll()
+
+	var mainBuf bytes.Buffer
 
 	if _, err := mainBuf.Write([]byte("\x1b[?25l")); err != nil {
 	    return err
@@ -286,7 +309,6 @@ func refreshScreen() error{
 	    return err
 
 	}
-	mainBuf.Reset()
 
 	return nil
 }
@@ -294,23 +316,30 @@ func refreshScreen() error{
 // input
 
 func moveCursor(key int) {
-	var cursorOutOfFile bool = false
-	var row *bytes.Buffer
+	var row *row
+	var lastRow bool = false
 	if E.cy >= E.numRows {
-	    cursorOutOfFile = true
+	    lastRow = true
 	} else {
-	    row = E.row[E.cy]
+	    row = E.rows[E.cy]
 	}
 	
 	switch (key){
 	case LEFT: 
-	    if (E.cx  != 0) {
+	    if (E.cx != 0) {
 		E.cx--
+	    } else if E.cy > 0 {
+		E.cy--
+		E.cx = E.rows[E.cy].chars.Len()
 	    }
 	case RIGHT:
-	    if !cursorOutOfFile {
-		if E.cx < row.Len() {
+	    if !lastRow {
+		// we are going past the below condition
+		if E.cx < row.chars.Len() {
 		    E.cx++
+		} else if E.cx == row.chars.Len(){
+		    E.cy++
+		    E.cx = 0
 		}
 	    } 
 	case DOWN:
@@ -325,14 +354,15 @@ func moveCursor(key int) {
 
 	var rowLen int = 0
 	if E.cy >= E.numRows {
-	    cursorOutOfFile = true
+	    lastRow = true
 	} else {
-	    row = E.row[E.cy]
-	    rowLen = row.Len()
+	    row = E.rows[E.cy]
+	    rowLen = E.rows[E.cy].chars.Len()
 	}
 	if E.cx > rowLen {
 	    E.cx = rowLen
 	}
+
 }
 
 func processKeyPress(oldState *term.State) bool{
@@ -387,7 +417,7 @@ func initEditor() {
 	E.numRows = 0
 	E.rowOff = 0
 	E.colOff = 0
-	E.row = []*bytes.Buffer{}
+	E.rows = []*row{}
 }
 
 func main() {
