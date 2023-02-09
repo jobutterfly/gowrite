@@ -29,6 +29,7 @@ const (
 
 const gowriteVersion = "0.1"
 const tabStopSize = 8
+const QUIT_TIMES = 2
 
 type editorConfig struct {
 	cx            int
@@ -45,6 +46,7 @@ type editorConfig struct {
 	fileName      string
 	statusMsg     string
 	statusMsgTime time.Time
+	quitTimes     int
 }
 
 type row struct {
@@ -221,6 +223,16 @@ func appendRow(s []byte) error {
 	return nil
 }
 
+func deleteRow(at int) {
+	var newRows []*row = E.rows
+	if at < 0 || at > E.numRows {
+		return
+	}
+	E.rows = append(newRows[:at], newRows[at+1:]...)
+	E.numRows--
+	E.dirty = true
+}
+
 func rowInsertChar(row *row, at int, c byte) {
 	var newC []byte
 	if at < 0 || at > row.chars.Len() {
@@ -234,6 +246,24 @@ func rowInsertChar(row *row, at int, c byte) {
 	E.dirty = true
 }
 
+func rowAppendBytes(row *row, b []byte) {
+	old := row.chars.Bytes()
+	row.chars = bytes.NewBuffer(bytes.Join([][]byte{old, b}, []byte("")))
+	updateRow(row)
+}
+
+func rowDeleteChar(row *row, at int) {
+	if at < 0 || at > row.chars.Len() {
+		return
+	}
+
+	old := row.chars.Bytes()
+	joinBytes := [][]byte{old[:at-1], old[at:]}
+	row.chars = bytes.NewBuffer(bytes.Join(joinBytes, []byte("")))
+	updateRow(row)
+	E.dirty = true
+}
+
 // editor operations
 
 func insertChar(c byte) {
@@ -242,6 +272,24 @@ func insertChar(c byte) {
 	}
 	rowInsertChar(E.rows[E.cy], E.cx, c)
 	E.cx++
+}
+
+func deleteChar() {
+	if E.cy == E.numRows {
+		return
+	}
+	if E.cx == 0 && E.cy == 0 {
+		return
+	}
+	if E.cx > 0 {
+		rowDeleteChar(E.rows[E.cy], E.cx)
+		E.cx--
+	} else {
+		E.cx = E.rows[E.cy - 1].chars.Len()
+		rowAppendBytes(E.rows[E.cy - 1], E.rows[E.cy].chars.Bytes())
+		deleteRow(E.cy)
+		E.cy--
+	}
 }
 
 // file i/o
@@ -538,6 +586,11 @@ func processKeyPress(oldState *term.State) bool {
 	// todo
 	// ctrl q
 	case 17:
+		if E.dirty && E.quitTimes > 0 {
+			setStatusMsg(fmt.Sprintf("Warning! File has unsaved changes. Press Ctrl-Q %d times to quit anyway.", E.quitTimes))
+			E.quitTimes--
+			return false
+		}
 		if _, err := os.Stdout.Write([]byte("\x1b[2J")); err != nil {
 			die(err)
 		}
@@ -569,10 +622,13 @@ func processKeyPress(oldState *term.State) bool {
 			moveCursor(DOWN)
 		}
 	case BACKSPACE:
+		deleteChar()
 	// ctrl h
 	case 8:
+		deleteChar()
 	case DELETE:
-		// todo
+		moveCursor(RIGHT)
+		deleteChar()
 	case HOME:
 		E.cx = 0
 	case END:
@@ -588,6 +644,7 @@ func processKeyPress(oldState *term.State) bool {
 		insertChar(byte(char))
 	}
 
+	E.quitTimes = QUIT_TIMES 
 	return false
 }
 
