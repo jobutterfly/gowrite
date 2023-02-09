@@ -211,12 +211,17 @@ func updateRow(row *row) {
 	row.render = bytes.NewBufferString(newChars)
 }
 
-func appendRow(s []byte) error {
+func insertRow(s []byte, at int) error {
 	n := &row{
 		chars: bytes.NewBuffer(s),
 	}
-	E.rows = append(E.rows, n)
-	updateRow(E.rows[len(E.rows)-1])
+	if E.numRows == at {
+		E.rows = append(E.rows, n)
+	} else {
+		E.rows = append(E.rows[:at+1], E.rows[at:]...)
+		E.rows[at] = n
+	}
+	updateRow(E.rows[at])
 	E.numRows++
 	E.dirty = true
 
@@ -224,11 +229,10 @@ func appendRow(s []byte) error {
 }
 
 func deleteRow(at int) {
-	var newRows []*row = E.rows
 	if at < 0 || at > E.numRows {
 		return
 	}
-	E.rows = append(newRows[:at], newRows[at+1:]...)
+	E.rows = append(E.rows[:at], E.rows[at+1:]...)
 	E.numRows--
 	E.dirty = true
 }
@@ -268,10 +272,22 @@ func rowDeleteChar(row *row, at int) {
 
 func insertChar(c byte) {
 	if E.cy == E.numRows {
-		appendRow([]byte(""))
+		insertRow([]byte(""), E.numRows)
 	}
 	rowInsertChar(E.rows[E.cy], E.cx, c)
 	E.cx++
+}
+
+func insertNewLine() {
+	if E.cx == 0 {
+		insertRow([]byte(""), E.cy)
+	} else {
+		insertRow((E.rows[E.cy].chars.Bytes())[E.cx:], E.cy + 1)
+		E.rows[E.cy].chars = bytes.NewBuffer((E.rows[E.cy].chars.Bytes())[:E.cx])
+		updateRow(E.rows[E.cy])
+	}
+	E.cy++
+	E.cx = 0
 }
 
 func deleteChar() {
@@ -320,7 +336,7 @@ func editorOpen(fileName string) error {
 		if scanner.Err() != nil {
 			die(err)
 		}
-		if err := appendRow([]byte(scanner.Text())); err != nil {
+		if err := insertRow([]byte(scanner.Text()), E.numRows); err != nil {
 			return err
 		}
 	}
@@ -583,7 +599,7 @@ func processKeyPress(oldState *term.State) bool {
 	switch char {
 	// see references in readme for ascii control codes
 	case '\r':
-	// todo
+		insertNewLine()
 	// ctrl q
 	case 17:
 		if E.dirty && E.quitTimes > 0 {
