@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 	"time"
+	"unicode"
 
 	"golang.org/x/sys/unix"
 	"golang.org/x/term"
@@ -347,6 +348,11 @@ func editorOpen(fileName string) error {
 
 func editorSave() {
 	if E.fileName == "" {
+		E.fileName = prompt("Save as: ")
+		if E.fileName == "" {
+			setStatusMsg("Save aborted")
+			return
+		}
 	}
 
 	buf := rowsToString()
@@ -542,6 +548,34 @@ func setStatusMsg(msg string) {
 }
 
 // input
+
+func prompt(prompt string) string {
+	var buf []byte
+
+	for ;; {
+		setStatusMsg(fmt.Sprintf("%s%s", prompt, buf))
+		refreshScreen()
+
+		var c int = readKey()
+		// 8 is ctrl h
+		if c == DELETE || c == 8 || c == BACKSPACE {
+			if len(buf) != 0 {
+				buf = buf[:len(buf) - 1]
+			}
+		} else if c == '\x1b' {
+			// needing to press escape twice to exit
+			setStatusMsg("")
+			return ""
+		} else if c == '\r' {
+			if len(buf) != 0 {
+				setStatusMsg("")
+				return string(buf)
+			}
+		} else if !unicode.IsControl(rune(c)) && c < 128 {
+			buf = append(buf, byte(c))
+		}
+	}
+}
 
 func moveCursor(key int) {
 	var row *row
