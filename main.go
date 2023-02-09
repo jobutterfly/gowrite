@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	BACHSPACE int = 127
+	BACKSPACE int = 127
 	LEFT      int = 1000
 	RIGHT     int = 1001
 	UP        int = 1002
@@ -41,6 +41,7 @@ type editorConfig struct {
 	screenCols    int
 	numRows       int
 	rows          []*row
+	dirty         bool
 	fileName      string
 	statusMsg     string
 	statusMsgTime time.Time
@@ -215,19 +216,22 @@ func appendRow(s []byte) error {
 	E.rows = append(E.rows, n)
 	updateRow(E.rows[len(E.rows)-1])
 	E.numRows++
+	E.dirty = true
 
 	return nil
 }
 
 func rowInsertChar(row *row, at int, c byte) {
+	var newC []byte
 	if at < 0 || at > row.chars.Len() {
 		at = row.chars.Len()
 	}
+	newC = append(newC, c)
 	old := row.chars.Bytes()
-	firstPart := append(old[:at], c)
-	joinBytes := [][]byte{firstPart, old[at:]}
-	row.chars = bytes.NewBuffer(bytes.Join(joinBytes, []byte("")))
+	joinBytes := [][]byte{old[:at], old[at:]}
+	row.chars = bytes.NewBuffer(bytes.Join(joinBytes, newC))
 	updateRow(row)
+	E.dirty = true
 }
 
 // editor operations
@@ -241,6 +245,18 @@ func insertChar(c byte) {
 }
 
 // file i/o
+
+func rowsToString() string {
+	var rowsArr [][]byte
+
+	for _, r := range E.rows {
+		rowsArr = append(rowsArr, r.chars.Bytes())
+	}
+	final := bytes.Join(rowsArr, []byte("\n"))
+	final = append(final, '\n')
+
+	return string(final)
+}
 
 func editorOpen(fileName string) error {
 	file, err := os.Open(fileName)
@@ -260,8 +276,22 @@ func editorOpen(fileName string) error {
 			return err
 		}
 	}
+	E.dirty = false
 
 	return nil
+}
+
+func editorSave() {
+	if E.fileName == "" {
+	}
+
+	buf := rowsToString()
+	if err := os.WriteFile(E.fileName, []byte(buf), 0644); err != nil {
+		setStatusMsg(fmt.Sprintf("Can't save! i/o error: %v", err))
+	}
+	E.dirty = false
+
+	setStatusMsg("bytes written to disk")
 }
 
 // output
@@ -335,11 +365,19 @@ func drawRows(buf *bytes.Buffer) error {
 }
 
 func drawStatusBar(buf *bytes.Buffer) error {
+	var fileName string = E.fileName
+	var dirtyText string = ""
 	if _, err := buf.Write([]byte("\x1b[7m")); err != nil {
 		return err
 	}
+	if fileName == "" {
+		fileName = "[No Name]"
+	}
+	if E.dirty {
+		dirtyText = "(modified)"
+	} 
 
-	status := fmt.Sprintf("%.20s - %d lines", E.fileName, E.numRows)
+	status := fmt.Sprintf("%.20s - %d lines %s", fileName, E.numRows, dirtyText)
 	rowStatus := fmt.Sprintf("%d/%d", E.cy+1, E.numRows)
 	length := len(status)
 	rLength := len(rowStatus)
@@ -497,7 +535,8 @@ func processKeyPress(oldState *term.State) bool {
 	switch char {
 	// see references in readme for ascii control codes
 	case '\r':
-	// control q
+	// todo
+	// ctrl q
 	case 17:
 		if _, err := os.Stdout.Write([]byte("\x1b[2J")); err != nil {
 			die(err)
@@ -506,6 +545,8 @@ func processKeyPress(oldState *term.State) bool {
 			die(err)
 		}
 		return true
+	case 19: 
+		editorSave()
 	case UP:
 		moveCursor(char)
 	case DOWN:
@@ -527,12 +568,22 @@ func processKeyPress(oldState *term.State) bool {
 		for i := E.screenRows; i > 1; i-- {
 			moveCursor(DOWN)
 		}
+	case BACKSPACE:
+	// ctrl h
+	case 8:
+	case DELETE:
+		// todo
 	case HOME:
 		E.cx = 0
 	case END:
 		if E.cy < E.numRows {
 			E.cx = E.rows[E.cy].chars.Len()
 		}
+	// ctrl l
+	case 12:
+		break
+	case '\x1b':
+		break
 	default:
 		insertChar(byte(char))
 	}
@@ -556,6 +607,7 @@ func initEditor() {
 	E.rowOff = 0
 	E.colOff = 0
 	E.rows = []*row{}
+	E.dirty = false
 	E.fileName = ""
 	E.statusMsg = ""
 	E.statusMsgTime = time.Now()
@@ -579,7 +631,7 @@ func main() {
 		}
 	}
 
-	setStatusMsg("HELP: Ctrl-Q = quit")
+	setStatusMsg("HELP: Ctrl-Q = quit | Ctrl-S = save")
 
 	for {
 		if err := refreshScreen(); err != nil {
