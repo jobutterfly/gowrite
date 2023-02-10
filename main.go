@@ -384,27 +384,60 @@ func editorSave() {
 
 // find
 
-func findCallback (query []byte, key int) {
-	if key == '\r' || key == '\x1b' {
-		return
-	}
-
-	for i := 0; i < E.numRows; i++ {
-		rowBytes := E.rows[i].render.Bytes()
-		index := bytes.Index(rowBytes, query)
-		if index >= 0 {
-			E.cy = i
-			E.cx = rxToCx(E.rows[i], index)
-			E.rowOff = E.numRows
-			break
-		}
-	}
-}
 
 func find() {
+	savedCx := E.cx
+	savedCy := E.cy
+	savedColOff := E.colOff
+	savedRowOff := E.rowOff
+
+	lastMatch := -1
+	direction := 1
+
+	findCallback := func (query []byte, key int) {
+		if key == '\r' || key == '\x1b' {
+			lastMatch = -1
+			return
+		} else if key == RIGHT || key == DOWN {
+			direction = 1
+		} else if key == LEFT || key == UP {
+			direction = -1
+		} else {
+			lastMatch = -1
+			direction = 1
+		}
+
+		if lastMatch == -1 {
+			direction = 1
+		}
+		current := lastMatch
+		for i := 0; i < E.numRows; i++ {
+			current += direction
+			if current == -1 {
+				current = E.numRows - 1
+			} else if current == E.numRows {
+				current = 0
+			}
+			rowBytes := E.rows[current].render.Bytes()
+			index := bytes.Index(rowBytes, query)
+			if index >= 0 {
+				lastMatch = current
+				E.cy = current
+				E.cx = rxToCx(E.rows[current], index)
+				E.rowOff = E.numRows
+				break
+			}
+		}
+	}
+
 	query := prompt("Search: ", findCallback)
 	if query != "" {
 		return
+	} else {
+		E.cx = savedCx
+		E.cy = savedCy
+		E.colOff = savedColOff
+		E.rowOff = savedRowOff
 	}
 }
 
