@@ -200,6 +200,24 @@ func cxToRx(row *row, cx int) int {
 	return rx
 }
 
+func rxToCx(row *row, rx int) int {
+	var cur_rx int = 0
+	var cx int = 0
+	buf := row.chars.Bytes()
+
+	for ; cx < row.chars.Len(); cx++ {
+		if buf[cx] == '\t' {
+			cur_rx += tabStopSize - 1
+		}
+		cur_rx++
+		if cur_rx > rx {
+			return cx
+		}
+	}
+
+	return cx
+}
+
 func updateRow(row *row) {
 	var newTab string = ""
 
@@ -348,7 +366,7 @@ func editorOpen(fileName string) error {
 
 func editorSave() {
 	if E.fileName == "" {
-		E.fileName = prompt("Save as: ")
+		E.fileName = prompt("Save as: ", nil)
 		if E.fileName == "" {
 			setStatusMsg("Save aborted")
 			return
@@ -362,6 +380,32 @@ func editorSave() {
 	E.dirty = false
 
 	setStatusMsg("bytes written to disk")
+}
+
+// find
+
+func findCallback (query []byte, key int) {
+	if key == '\r' || key == '\x1b' {
+		return
+	}
+
+	for i := 0; i < E.numRows; i++ {
+		rowBytes := E.rows[i].render.Bytes()
+		index := bytes.Index(rowBytes, query)
+		if index >= 0 {
+			E.cy = i
+			E.cx = rxToCx(E.rows[i], index)
+			E.rowOff = E.numRows
+			break
+		}
+	}
+}
+
+func find() {
+	query := prompt("Search: ", findCallback)
+	if query != "" {
+		return
+	}
 }
 
 // output
@@ -549,7 +593,7 @@ func setStatusMsg(msg string) {
 
 // input
 
-func prompt(prompt string) string {
+func prompt(prompt string, callBack func([]byte, int)) string {
 	var buf []byte
 
 	for ;; {
@@ -565,14 +609,24 @@ func prompt(prompt string) string {
 		} else if c == '\x1b' {
 			// needing to press escape twice to exit
 			setStatusMsg("")
+			if callBack != nil {
+				callBack(buf, c)
+			}
 			return ""
 		} else if c == '\r' {
 			if len(buf) != 0 {
 				setStatusMsg("")
+				if callBack != nil {
+					callBack(buf, c)
+					return string(buf)
+				}
 				return string(buf)
 			}
 		} else if !unicode.IsControl(rune(c)) && c < 128 {
 			buf = append(buf, byte(c))
+		}
+		if callBack != nil {
+			callBack(buf, c)
 		}
 	}
 }
@@ -648,6 +702,7 @@ func processKeyPress(oldState *term.State) bool {
 			die(err)
 		}
 		return true
+	// ctrl s
 	case 19: 
 		editorSave()
 	case UP:
@@ -685,6 +740,9 @@ func processKeyPress(oldState *term.State) bool {
 		if E.cy < E.numRows {
 			E.cx = E.rows[E.cy].chars.Len()
 		}
+	// ctrl f
+	case 6:
+		find()
 	// ctrl l
 	case 12:
 		break
@@ -738,7 +796,7 @@ func main() {
 		}
 	}
 
-	setStatusMsg("HELP: Ctrl-Q = quit | Ctrl-S = save")
+	setStatusMsg("HELP: Ctrl-Q = quit | Ctrl-S = save | Ctrl-F = find")
 
 	for {
 		if err := refreshScreen(); err != nil {
