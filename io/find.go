@@ -3,9 +3,9 @@ package io
 import (
 	"bytes"
 
-	"github.com/jobutterlfy/gowrite/editor"
-	"github.com/jobutterlfy/gowrite/operations"
-	"github.com/jobutterlfy/gowrite/consts"
+	"github.com/jobutterfly/gowrite/editor"
+	"github.com/jobutterfly/gowrite/operations"
+	"github.com/jobutterfly/gowrite/consts"
 )
 
 func Find() {

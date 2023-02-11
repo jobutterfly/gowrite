@@ -3,7 +3,7 @@ package operations
 import (
 	"bytes"
 
-	"github.com/jobutterlfy/gowrite/editor"
+	"github.com/jobutterfly/gowrite/editor"
 )
 
 func InsertChar(c byte) {

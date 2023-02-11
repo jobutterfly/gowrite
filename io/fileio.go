@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/jobutterlfy/gowrite/editor"
-	"github.com/jobutterlfy/gowrite/operations"
-	"github.com/jobutterlfy/gowrite/terminal"
+	"github.com/jobutterfly/gowrite/editor"
+	"github.com/jobutterfly/gowrite/operations"
+	"github.com/jobutterfly/gowrite/terminal"
 )
 
 

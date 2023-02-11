@@ -13,7 +13,7 @@ const (
 	PAGE_DOWN int = 1008
 )
 
-const gowriteVersion = "0.1"
-const tabStopSize = 8
+const VERSION = "0.1"
+const TAB_STOP_SIZE = 8
 const QUIT_TIMES = 2
 

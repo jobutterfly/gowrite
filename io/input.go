@@ -6,10 +6,10 @@ import (
 	"unicode"
 
 	"golang.org/x/term"
-	"github.com/jobutterlfy/gowrite/editor"
-	"github.com/jobutterlfy/gowrite/operations"
-	"github.com/jobutterlfy/gowrite/terminal"
-	"github.com/jobutterlfy/gowrite/consts"
+	"github.com/jobutterfly/gowrite/editor"
+	"github.com/jobutterfly/gowrite/operations"
+	"github.com/jobutterfly/gowrite/terminal"
+	"github.com/jobutterfly/gowrite/consts"
 )
 
 
@@ -101,7 +101,7 @@ func MoveCursor(key int) {
 
 }
 
-func processKeyPress(oldState *term.State) bool {
+func ProcessKeyPress(oldState *term.State) bool {
 	var char int = terminal.ReadKey()
 
 	switch char {

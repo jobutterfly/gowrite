@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"golang.org/x/sys/unix"
 	"golang.org/x/term"
@@ -140,3 +141,24 @@ func GetWindowSize() (rows int, cols int, err error) {
 	return int(winSize.Row), int(winSize.Col), nil
 }
 
+func InitEditor() {
+	editor.E.Cx = 0
+	editor.E.Cy = 0
+	editor.E.Rx = 0
+	rows, cols, err := GetWindowSize()
+	if err != nil {
+		Die(err)
+	}
+	editor.E.ScreenRows = rows
+	editor.E.ScreenCols = cols
+	editor.E.NumRows = 0
+	editor.E.RowOff = 0
+	editor.E.ColOff = 0
+	editor.E.Rows = []*editor.Row{}
+	editor.E.Dirty = false
+	editor.E.FileName = ""
+	editor.E.StatusMsg = ""
+	editor.E.StatusMsgTime = time.Now()
+
+	editor.E.ScreenRows -= 2
+}

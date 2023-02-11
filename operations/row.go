@@ -14,7 +14,7 @@ func CxToRx(row *editor.Row, cx int) int {
 	buf := row.Chars.Bytes()
 	for i := 0; i < cx; i++ {
 		if buf[i] == '\t' {
-			rx += (consts.tabStopSize - 1)
+			rx += (consts.TAB_STOP_SIZE - 1)
 		}
 		rx++
 	}
@@ -28,7 +28,7 @@ func RxToCx(row *editor.Row, rx int) int {
 
 	for ; cx < row.Chars.Len(); cx++ {
 		if buf[cx] == '\t' {
-			cur_rx += consts.tabStopSize - 1
+			cur_rx += consts.TAB_STOP_SIZE - 1
 		}
 		cur_rx++
 		if cur_rx > rx {
@@ -42,7 +42,7 @@ func RxToCx(row *editor.Row, rx int) int {
 func UpdateRow(row *editor.Row) {
 	var newTab string = ""
 
-	for i := 0; i < consts.tabStopSize; i++ {
+	for i := 0; i < consts.TAB_STOP_SIZE; i++ {
 		newTab = newTab + " "
 	}
 	chars := row.Chars.String()

@@ -6,9 +6,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/jobutterlfy/gowrite/editor"
-	"github.com/jobutterlfy/gowrite/operations"
-	"github.com/jobutterlfy/gowrite/consts"
+	"github.com/jobutterfly/gowrite/editor"
+	"github.com/jobutterfly/gowrite/operations"
+	"github.com/jobutterfly/gowrite/consts"
 )
 
 func Scroll() {
@@ -39,7 +39,7 @@ func DrawRows(buf *bytes.Buffer) error {
 				if _, err := buf.Write([]byte("~")); err != nil {
 					return err
 				}
-				welcome := fmt.Sprintf("gowrite version: %s", consts.gowriteVersion)
+				welcome := fmt.Sprintf("gowrite version: %s", consts.VERSION)
 				padding := (editor.E.ScreenCols - len(welcome)) / 2
 				for ; padding > 1; padding-- {
 					buf.Write([]byte(" "))
