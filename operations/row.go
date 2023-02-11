@@ -5,29 +5,30 @@ import (
 	"bytes"
 	"strings"
 
+	"github.com/jobutterfly/gowrite/consts"
 	"github.com/jobutterfly/gowrite/editor"
 )
 
-func CxToRx(row *Row, cx int) int {
+func CxToRx(row *editor.Row, cx int) int {
 	var rx int = 0
 	buf := row.Chars.Bytes()
 	for i := 0; i < cx; i++ {
 		if buf[i] == '\t' {
-			rx += (tabStopSize - 1)
+			rx += (consts.tabStopSize - 1)
 		}
 		rx++
 	}
 	return rx
 }
 
-func RxToCx(row *Row, rx int) int {
+func RxToCx(row *editor.Row, rx int) int {
 	var cur_rx int = 0
 	var cx int = 0
 	buf := row.Chars.Bytes()
 
 	for ; cx < row.Chars.Len(); cx++ {
 		if buf[cx] == '\t' {
-			cur_rx += tabStopSize - 1
+			cur_rx += consts.tabStopSize - 1
 		}
 		cur_rx++
 		if cur_rx > rx {
@@ -38,10 +39,10 @@ func RxToCx(row *Row, rx int) int {
 	return cx
 }
 
-func UpdateRow(row *Row) {
+func UpdateRow(row *editor.Row) {
 	var newTab string = ""
 
-	for i := 0; i < tabStopSize; i++ {
+	for i := 0; i < consts.tabStopSize; i++ {
 		newTab = newTab + " "
 	}
 	chars := row.Chars.String()
@@ -51,32 +52,32 @@ func UpdateRow(row *Row) {
 }
 
 func InsertRow(s []byte, at int) error {
-	n := &row{
+	n := &editor.Row{
 		Chars: bytes.NewBuffer(s),
 	}
-	if E.NumRows == at {
-		E.Rows = append(E.Rows, n)
+	if editor.E.NumRows == at {
+		editor.E.Rows = append(editor.E.Rows, n)
 	} else {
-		E.Rows = append(E.Rows[:at+1], E.Rows[at:]...)
-		E.Rows[at] = n
+		editor.E.Rows = append(editor.E.Rows[:at+1], editor.E.Rows[at:]...)
+		editor.E.Rows[at] = n
 	}
-	UpdateRow(E.Rows[at])
-	E.NumRows++
-	E.Dirty = true
+	UpdateRow(editor.E.Rows[at])
+	editor.E.NumRows++
+	editor.E.Dirty = true
 
 	return nil
 }
 
 func DeleteRow(at int) {
-	if at < 0 || at > E.NumRows {
+	if at < 0 || at > editor.E.NumRows {
 		return
 	}
-	E.Rows = append(E.Rows[:at], E.Rows[at+1:]...)
-	E.NumRows--
-	E.Dirty = true
+	editor.E.Rows = append(editor.E.Rows[:at], editor.E.Rows[at+1:]...)
+	editor.E.NumRows--
+	editor.E.Dirty = true
 }
 
-func RowInsertChar(row *Row, at int, c byte) {
+func RowInsertChar(row *editor.Row, at int, c byte) {
 	var newC []byte
 	if at < 0 || at > row.Chars.Len() {
 		at = row.Chars.Len()
@@ -86,16 +87,16 @@ func RowInsertChar(row *Row, at int, c byte) {
 	joinBytes := [][]byte{old[:at], old[at:]}
 	row.Chars = bytes.NewBuffer(bytes.Join(joinBytes, newC))
 	UpdateRow(row)
-	E.Dirty = true
+	editor.E.Dirty = true
 }
 
-func RowAppendBytes(row *Row, b []byte) {
+func RowAppendBytes(row *editor.Row, b []byte) {
 	old := row.Chars.Bytes()
 	row.Chars = bytes.NewBuffer(bytes.Join([][]byte{old, b}, []byte("")))
 	UpdateRow(row)
 }
 
-func RowDeleteChar(row *Row, at int) {
+func RowDeleteChar(row *editor.Row, at int) {
 	if at < 0 || at > row.Chars.Len() {
 		return
 	}
@@ -104,5 +105,5 @@ func RowDeleteChar(row *Row, at int) {
 	joinBytes := [][]byte{old[:at-1], old[at:]}
 	row.Chars = bytes.NewBuffer(bytes.Join(joinBytes, []byte("")))
 	UpdateRow(row)
-	E.Dirty = true
+	editor.E.Dirty = true
 }

@@ -4,24 +4,9 @@ import (
 	"os"
 
 	"golang.org/x/term"
+	"github.com/jobutterlfy/gowrite/editor"
 )
 
-const (
-	BACKSPACE int = 127
-	LEFT      int = 1000
-	RIGHT     int = 1001
-	UP        int = 1002
-	DOWN      int = 1003
-	DELETE    int = 1004
-	HOME      int = 1005
-	END       int = 1006
-	PAGE_UP   int = 1007
-	PAGE_DOWN int = 1008
-)
-
-const gowriteVersion = "0.1"
-const tabStopSize = 8
-const QUIT_TIMES = 2
 
 func main() {
 	oldState, err := term.MakeRaw(int(os.Stdin.Fd()))
@@ -30,7 +15,7 @@ func main() {
 	}
 	E.Termios = oldState
 	defer term.Restore(int(os.Stdin.Fd()), E.Termios)
-	initEditor()
+	editor.InitEditor()
 
 	args := os.Args
 	if len(args) >= 2 {

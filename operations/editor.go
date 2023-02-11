@@ -2,43 +2,45 @@ package operations
 
 import (
 	"bytes"
+
+	"github.com/jobutterlfy/gowrite/editor"
 )
 
 func InsertChar(c byte) {
-	if E.Cy == E.NumRows {
-		InsertRow([]byte(""), E.NumRows)
+	if editor.E.Cy == editor.E.NumRows {
+		InsertRow([]byte(""), editor.E.NumRows)
 	}
-	RowInsertChar(E.Rows[E.Cy], E.Cx, c)
-	E.Cx++
+	RowInsertChar(editor.E.Rows[editor.E.Cy], editor.E.Cx, c)
+	editor.E.Cx++
 }
 
 func InsertNewLine() {
-	if E.Cx == 0 {
-		InsertRow([]byte(""), E.Cy)
+	if editor.E.Cx == 0 {
+		InsertRow([]byte(""), editor.E.Cy)
 	} else {
-		InsertRow((E.Rows[E.Cy].Chars.Bytes())[E.Cx:], E.cy + 1)
-		E.Rows[E.Cy].Chars = bytes.NewBuffer((E.Rows[E.cy].Chars.Bytes())[:E.Cx])
-		UpdateRow(E.Rows[E.Cy])
+		InsertRow((editor.E.Rows[editor.E.Cy].Chars.Bytes())[editor.E.Cx:], editor.E.Cy + 1)
+		editor.E.Rows[editor.E.Cy].Chars = bytes.NewBuffer((editor.E.Rows[editor.E.Cy].Chars.Bytes())[:editor.E.Cx])
+		UpdateRow(editor.E.Rows[editor.E.Cy])
 	}
-	E.Cy++
-	E.Cx = 0
+	editor.E.Cy++
+	editor.E.Cx = 0
 }
 
 func DeleteChar() {
-	if E.Cy == E.NumRows {
+	if editor.E.Cy == editor.E.NumRows {
 		return
 	}
-	if E.Cx == 0 && E.Cy == 0 {
+	if editor.E.Cx == 0 && editor.E.Cy == 0 {
 		return
 	}
-	if E.Cx > 0 {
-		RowDeleteChar(E.Rows[E.Cy], E.Cx)
-		E.Cx--
+	if editor.E.Cx > 0 {
+		RowDeleteChar(editor.E.Rows[editor.E.Cy], editor.E.Cx)
+		editor.E.Cx--
 	} else {
-		E.Cx = E.Rows[E.Cy - 1].Chars.Len()
-		RowAppendBytes(E.Rows[E.Cy - 1], E.Rows[E.cy].Chars.Bytes())
-		DeleteRow(E.Cy)
-		E.Cy--
+		editor.E.Cx = editor.E.Rows[editor.E.Cy - 1].Chars.Len()
+		RowAppendBytes(editor.E.Rows[editor.E.Cy - 1], editor.E.Rows[editor.E.Cy].Chars.Bytes())
+		DeleteRow(editor.E.Cy)
+		editor.E.Cy--
 	}
 }
 

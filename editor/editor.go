@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"golang.org/x/term"
+	"github.com/jobutterlfy/gowrite/terminal"
 )
 
 
@@ -34,7 +35,7 @@ type Row struct {
 
 var E editorConfig
 
-func initEditor() {
+func InitEditor() {
 	E.Cx = 0
 	E.Cy = 0
 	E.Rx = 0

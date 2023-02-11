@@ -8,11 +8,13 @@ import (
 
 	"golang.org/x/sys/unix"
 	"golang.org/x/term"
+	"github.com/jobutterfly/gowrite/editor"
+	"github.com/jobutterfly/gowrite/consts"
 )
 
 
 func Die(err error) {
-	term.Restore(int(os.Stdin.Fd()), E.Termios)
+	term.Restore(int(os.Stdin.Fd()), editor.E.Termios)
 	if _, err := os.Stdout.Write([]byte("\x1b[2J")); err != nil {
 		log.Fatal("Could not clean screen")
 	}
@@ -45,44 +47,44 @@ func ReadKey() int {
 				if seq[2] == '~' {
 					switch seq[1] {
 					case '1':
-						return HOME
+						return consts.HOME
 					case '3':
-						return DELETE
+						return consts.DELETE
 					case '4':
-						return END
+						return consts.END
 					case '5':
-						return PAGE_UP
+						return consts.PAGE_UP
 					case '6':
-						return PAGE_DOWN
+						return consts.PAGE_DOWN
 					case '7':
-						return HOME
+						return consts.HOME
 					case '8':
-						return END
+						return consts.END
 					}
 				}
 			} else {
 				switch seq[1] {
 				case 'A':
-					return UP
+					return consts.UP
 				case 'B':
-					return DOWN
+					return consts.DOWN
 				case 'C':
-					return RIGHT
+					return consts.RIGHT
 				case 'D':
-					return LEFT
+					return consts.LEFT
 				case 'H':
-					return HOME
+					return consts.HOME
 				case 'F':
-					return END
+					return consts.END
 				}
 
 			}
 		} else if seq[0] == 'O' {
 			switch seq[1] {
 			case 'H':
-				return HOME
+				return consts.HOME
 			case 'F':
-				return END
+				return consts.END
 			}
 		}
 
