@@ -6,6 +6,7 @@ The objective is to create a simple text editor and learn how to correctly creat
 - Add vim like key bindings
 - Add syntax highlighting with tree-sitter (make c library interface with go)
 - Add LSP support
+- Separate different functions into different modules
 
 ## References
 - https://viewsourcecode.org/snaptoken/kilo/
